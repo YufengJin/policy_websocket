@@ -1,57 +1,57 @@
-# Policy Server 搭建指南
+# Policy Server Setup Guide
 
-本文档说明如何将任意策略（含 PyTorch `nn.Module`）封装为 Policy Server，支持单步输出和 Action Chunk。可与 RoboCasa `run_demo`/`run_eval`、openpi 等客户端对接。
+This document describes how to wrap any policy (including PyTorch `nn.Module`) as a Policy Server, supporting both single-step output and Action Chunk. Compatible with RoboCasa `run_demo`/`run_eval`, openpi, and other clients.
 
 ---
 
-## 1. 前置条件：Policy 需满足的接口
+## 1. Prerequisites: Policy Interface Requirements
 
-### 1.1 BasePolicy 接口
+### 1.1 BasePolicy Interface
 
-任何要作为 Policy Server 的策略必须实现 `BasePolicy`：
+Any policy that serves as a Policy Server must implement `BasePolicy`:
 
 ```python
 from policy_websocket import BasePolicy
 
 class MyPolicy(BasePolicy):
     def infer(self, obs: Dict) -> Dict:
-        """观测 → 动作字典。必须实现。"""
+        """Observation → action dict. Must implement."""
         ...
         return {"actions": action_array}
 
     def reset(self) -> None:
-        """新 episode 开始时的重置。可选，默认 pass。"""
+        """Reset when a new episode starts. Optional, defaults to pass."""
         pass
 ```
 
-### 1.2 观测 `obs` 格式（客户端传入）
+### 1.2 Observation `obs` Format (from client)
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `primary_image` | `np.ndarray` (H,W,3) | 主相机 RGB |
-| `secondary_image` | `np.ndarray` (H,W,3) | 副相机 RGB |
-| `wrist_image` | `np.ndarray` (H,W,3) | 腕部相机 RGB |
-| `proprio` | `np.ndarray` (D,) | 本体感知（夹爪、末端位姿等） |
-| `task_description` | `str` | 任务自然语言描述 |
-| `action_dim` / `action_low` / `action_high` | 首次 infer 时 | Episode 初始化用的 action spec |
+| `primary_image` | `np.ndarray` (H,W,3) | Primary camera RGB |
+| `secondary_image` | `np.ndarray` (H,W,3) | Secondary camera RGB |
+| `wrist_image` | `np.ndarray` (H,W,3) | Wrist camera RGB |
+| `proprio` | `np.ndarray` (D,) | Proprioception (gripper, end-effector pose, etc.) |
+| `task_description` | `str` | Natural language task description |
+| `action_dim` / `action_low` / `action_high` | First infer only | Action spec for episode initialization |
 
-首次 infer 只有 `action_dim`, `action_low`, `action_high`, `task_name`, `task_description`，没有图像。
+The first infer contains only `action_dim`, `action_low`, `action_high`, `task_name`, `task_description`; no images.
 
-### 1.3 返回 `action` 格式
+### 1.3 Return `action` Format
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `actions` | `np.ndarray` | `(action_dim,)` 或 `(7,)`。7 维时客户端会自动 pad 到 env 维度 |
+| `actions` | `np.ndarray` | `(action_dim,)` or `(7,)`. Client auto-pads 7-dim to env dimension |
 
 ---
 
-## 2. Policy Server 的条件
+## 2. Policy Server Requirements
 
-满足以下即可启动 Policy Server：
+The following conditions are sufficient to start a Policy Server:
 
-1. 实现 `BasePolicy` 的 `infer(obs) -> Dict`，返回 `{"actions": np.ndarray}`
-2. 返回值中 `actions` 为 `np.float64`，shape `(action_dim,)` 或 `(7,)`
-3. （推荐）处理首次 infer 的 action spec：`action_dim`, `action_low`, `action_high`
+1. Implement `BasePolicy`'s `infer(obs) -> Dict`, returning `{"actions": np.ndarray}`
+2. Return `actions` as `np.float64`, shape `(action_dim,)` or `(7,)`
+3. (Recommended) Handle first-infer action spec: `action_dim`, `action_low`, `action_high`
 
 ```python
 from policy_websocket import BasePolicy, WebsocketPolicyServer
@@ -63,13 +63,13 @@ server.serve_forever()
 
 ---
 
-## 3. Action Chunk 的条件
+## 3. Action Chunk Requirements
 
-若希望「预测 H 步，执行 K 步」（例如 predict 16, execute 8），需满足：
+For "predict H steps, execute K steps" (e.g., predict 16, execute 8), you must:
 
-1. 策略返回 **chunk**：`{"actions": np.ndarray}`，shape 为 `(H, action_dim)`
-2. 用 `ActionChunkBroker` 包装，设置 `action_horizon=K`
-3. （推荐）用 `ResetOnInitPolicy` 在 episode 开始时调用 `reset()`
+1. Policy returns **chunk**: `{"actions": np.ndarray}` with shape `(H, action_dim)`
+2. Wrap with `ActionChunkBroker`, set `action_horizon=K`
+3. (Recommended) Use `ResetOnInitPolicy` to call `reset()` at episode start
 
 ```python
 from policy_websocket import BasePolicy, ActionChunkBroker, WebsocketPolicyServer
@@ -87,9 +87,9 @@ server.serve_forever()
 
 ---
 
-## 4. 从 PyTorch nn.Module 搭建 Policy Server
+## 4. Building Policy Server from PyTorch nn.Module
 
-### 4.1 单步策略（每步推理）
+### 4.1 Single-Step Policy (inference per step)
 
 ```python
 import torch
@@ -137,7 +137,7 @@ if __name__ == "__main__":
     server.serve_forever()
 ```
 
-### 4.2 Action Chunk 策略（一次预测多步）
+### 4.2 Action Chunk Policy (predict multiple steps at once)
 
 ```python
 class TorchChunkPolicy(BasePolicy):
@@ -167,9 +167,9 @@ server = WebsocketPolicyServer(policy=policy, port=8000)
 server.serve_forever()
 ```
 
-### 4.3 ResetOnInitPolicy（Episode 边界 reset）
+### 4.3 ResetOnInitPolicy (Episode boundary reset)
 
-客户端不会显式发送 reset，通过「首次 infer 没有图像」判断新 episode：
+The client does not explicitly send reset; a new episode is detected by "first infer has no images":
 
 ```python
 class ResetOnInitPolicy(BasePolicy):
@@ -187,21 +187,21 @@ class ResetOnInitPolicy(BasePolicy):
 
 ---
 
-## 5. 快速搭建清单
+## 5. Quick Setup Checklist
 
-- [ ] 继承 `BasePolicy`，实现 `infer(obs) -> {"actions": np.ndarray}`
-- [ ] `actions` 为 `np.float64`，shape `(action_dim,)` 或 `(7,)`；chunk 时为 `(H, action_dim)`
-- [ ] 首次 infer 处理 `action_dim` / `action_low` / `action_high`（如需）
-- [ ] 若用 chunk：用 `ActionChunkBroker` 包装，并搭配 `ResetOnInitPolicy`
-- [ ] 用 `WebsocketPolicyServer` 启动服务
+- [ ] Inherit `BasePolicy`, implement `infer(obs) -> {"actions": np.ndarray}`
+- [ ] `actions` as `np.float64`, shape `(action_dim,)` or `(7,)`; for chunk: `(H, action_dim)`
+- [ ] Handle first-infer `action_dim` / `action_low` / `action_high` (if needed)
+- [ ] If using chunk: wrap with `ActionChunkBroker` and use `ResetOnInitPolicy`
+- [ ] Start server with `WebsocketPolicyServer`
 
 ---
 
-## 6. 完整模板：单步 PyTorch Policy Server
+## 6. Full Template: Single-Step PyTorch Policy Server
 
 ```python
 #!/usr/bin/env python3
-"""模板：将 PyTorch 模型封装为 Policy Server。"""
+"""Template: Wrap a PyTorch model as a Policy Server."""
 
 import argparse
 import numpy as np
@@ -264,21 +264,21 @@ if __name__ == "__main__":
 
 ---
 
-## 7. 运行与测试
+## 7. Run and Test
 
 ```bash
-# 终端 1：启动 Policy Server
+# Terminal 1: Start Policy Server
 python your_policy_server.py --port 8000
 
-# 终端 2：使用 RoboCasa 客户端
+# Terminal 2: Use RoboCasa client
 python scripts/run_demo.py --policy_server_addr localhost:8000 --task_name PnPCounterToCab
-# 或
+# or
 python scripts/run_eval.py --policy_server_addr localhost:8000 --task_name PnPCounterToCab --num_trials 5
 ```
 
 ---
 
-## 8. RoboCasa 参考实现
+## 8. RoboCasa Reference Implementations
 
-- `tests/test_random_policy_server.py` — 单步随机策略
-- `tests/test_ac_policy_server.py` — Action Chunk（predict 16, execute 8）+ ResetOnInitPolicy
+- `tests/test_random_policy_server.py` — Single-step random policy
+- `tests/test_ac_policy_server.py` — Action Chunk (predict 16, execute 8) + ResetOnInitPolicy
