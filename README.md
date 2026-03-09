@@ -34,20 +34,6 @@ Minimal dependencies (`websockets`, `msgpack`, `numpy`), no framework lock-in.
   <img src="./assets/architecture.png" alt="architecture diagram" width="700" />
 </p>
 
-```
-┌─────────────────────┐         WebSocket / msgpack         ┌─────────────────────────────┐
-│   Robot / Env        │  ──── obs dict ──────────────────▶  │  WebsocketPolicyServer      │
-│                      │                                     │  ┌───────────────────────┐  │
-│  WebsocketClient     │  ◀─── action dict ────────────────  │  │ BasePolicy.infer(obs) │  │
-│  Policy.infer(obs)   │                                     │  └───────────────────────┘  │
-└─────────────────────┘                                      │         or                   │
-                                                             │  ┌───────────────────────┐  │
-                                                             │  │ ActionChunkBroker     │  │
-                                                             │  │ predict 16, execute 8 │  │
-                                                             │  └───────────────────────┘  │
-                                                             └─────────────────────────────┘
-```
-
 ## Quick Start
 
 ```bash
