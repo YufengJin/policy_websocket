@@ -26,9 +26,6 @@ class SimplePolicy(BasePolicy):
         action = np.random.randn(action_dim).astype(np.float64) * 0.1
         return {"actions": action}
 
-    def reset(self) -> None:
-        pass
-
 
 def main() -> None:
     parser = argparse.ArgumentParser()

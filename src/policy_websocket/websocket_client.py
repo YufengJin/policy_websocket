@@ -61,6 +61,7 @@ class WebsocketClientPolicy(_base_policy.BasePolicy):
                 time.sleep(2)
 
     def infer(self, obs: Dict) -> Dict:
+        """Send an obs to the server, return the action dict."""
         data = self._packer.pack(obs)
         self._ws.send(data)
         response = self._ws.recv()
@@ -78,7 +79,15 @@ class WebsocketClientPolicy(_base_policy.BasePolicy):
             self._ws = None
 
     def reset(self) -> None:
-        pass
+        """Send a reset request to the server; block until ack."""
+        self._ws.send(self._packer.pack({"__command__": "reset"}))
+        response = self._ws.recv()
+        if isinstance(response, str):
+            raise RuntimeError(f"Error from policy server during reset:\n{response}")
+        ack = msgpack_numpy.unpackb(response)
+        if not (isinstance(ack, dict) and ack.get("ok") is True
+                and ack.get("__command__") == "reset"):
+            raise RuntimeError(f"Unexpected reset ack: {ack!r}")
 
     def __del__(self):
         self.close()

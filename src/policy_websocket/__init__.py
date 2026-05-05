@@ -8,11 +8,12 @@ and ActionChunkBroker. Compatible with openpi, robocasa, and other robot envs.
 from policy_websocket.base_policy import BasePolicy
 from policy_websocket.websocket_client import WebsocketClientPolicy
 from policy_websocket.websocket_server import WebsocketPolicyServer
-from policy_websocket.action_chunk_broker import ActionChunkBroker
+from policy_websocket.action_chunk_broker import ResetOnInitPolicy, ActionChunkBroker
 
 __all__ = [
     "BasePolicy",
     "WebsocketClientPolicy",
     "WebsocketPolicyServer",
+    "ResetOnInitPolicy",
     "ActionChunkBroker",
 ]
