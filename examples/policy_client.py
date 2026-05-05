@@ -48,28 +48,28 @@ def main() -> None:
     parser.add_argument("--episodes", type=int, default=1, help="Number of episodes")
     args = parser.parse_args()
 
-    policy = WebsocketClientPolicy(host=args.host, port=args.port)
-    metadata = policy.get_server_metadata()
+    client = WebsocketClientPolicy(host=args.host, port=args.port)
+    metadata = client.get_server_metadata()
     print(f"Connected. Server metadata: {metadata}")
 
     for ep in range(args.episodes):
         # Sends a reset request to the policy server. Required when the server
         # holds episode-scoped state — e.g. an ActionChunkBroker would need to clean its
         # cached chunk from the previous episode.
-        policy.reset()
+        client.reset()
         print(f"Episode {ep + 1}/{args.episodes}: reset ack received")
 
-        init_action = policy.infer(make_init_obs())["actions"]
+        init_action = client.infer(make_init_obs())["actions"]
         print(f"  Init infer: actions shape {init_action.shape}, sample {init_action[:3]}")
 
         for step in range(args.steps):
             obs = make_step_obs(step)
-            action_dict = policy.infer(obs)
+            action_dict = client.infer(obs)
             actions = action_dict["actions"]
             if step < 3 or step == args.steps - 1:
                 print(f"  Step {step}: actions shape {actions.shape}, sample {actions[:3]}")
 
-    policy.close()
+    client.close()
     print(f"Done. {args.episodes} episode(s), {args.steps} step(s) each.")
 
 
