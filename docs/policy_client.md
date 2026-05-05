@@ -66,7 +66,7 @@ policy_websocket/
 - `infer(obs)`: Call remote policy inference
 - `get_server_metadata()`: Returns metadata received during handshake
 - `close()`: Close WebSocket connection
-- `reset()`: Currently empty implementation
+- `reset()`: Send `{"__command__": "reset"}` and block on ack. Call between episodes.
 
 ---
 
@@ -78,7 +78,7 @@ policy_websocket/
 
 1. **Start**: Bind to host:port, start WebSocket server
 2. **Connection handling**: For each new connection, send `metadata` first, then enter request/response loop
-3. **Inference loop**: Receive obs → call `policy.infer(obs)` → attach `server_timing` → return action
+3. **Dispatch loop**: For frames with `"__command__": "reset"` call `policy.reset()` (reply ack); otherwise call `policy.infer(obs)` → attach `server_timing` → reply action
 
 **Parameters**:
 
@@ -105,6 +105,7 @@ policy_websocket/
 - First `infer`: Call inner policy, get `actions` shape `(H, action_dim)`
 - Later `infer`: Return `actions[step]` by step index
 - When `step >= action_horizon`: Next `infer` re-calls inner policy
+- `reset()`: Clears the cached chunk and forwards to inner policy
 
 **Parameters**:
 

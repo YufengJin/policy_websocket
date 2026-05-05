@@ -1,5 +1,8 @@
 """WebSocket policy server — serves a BasePolicy over WebSocket.
 
+Each client frame is either a control frame (top-level ``"__command__"`` key)
+or an inference frame (an obs dict). See ``_handler`` for the dispatch.
+
 Usage::
 
     from policy_websocket import WebsocketPolicyServer
@@ -96,8 +99,22 @@ class WebsocketPolicyServer:
         while True:
             try:
                 start_time = time.monotonic()
-                obs = msgpack_numpy.unpackb(await websocket.recv())
+                msg = msgpack_numpy.unpackb(await websocket.recv())
 
+                # Control frames bypass policy.infer().
+                if isinstance(msg, dict) and "__command__" in msg:
+                    cmd = msg["__command__"]
+                    if cmd == "reset":
+                        self._policy.reset()
+                        await websocket.send(packer.pack({"__command__": "reset", "ok": True}))
+                    else:
+                        await websocket.send(packer.pack({
+                            "__command__": cmd, "ok": False,
+                            "error": f"unknown command: {cmd!r}",
+                        }))
+                    continue
+
+                obs = msg
                 infer_time = time.monotonic()
                 action = self._policy.infer(obs)
                 infer_time = time.monotonic() - infer_time

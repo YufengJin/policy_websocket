@@ -43,6 +43,29 @@ The first infer contains only `action_dim`, `action_low`, `action_high`, `task_n
 |------|------|------|
 | `actions` | `np.ndarray` | `(action_dim,)` or `(7,)`. Client auto-pads 7-dim to env dimension |
 
+### 1.4 Wire protocol
+
+Each client→server frame is a msgpack dict, dispatched by `WebsocketPolicyServer` on one reserved key:
+
+| Frame | Server side effect |
+|---|---|
+| `{"__command__": "reset"}` | calls `policy.reset()`; replies `{"__command__": "reset", "ok": True}` |
+| any other dict | calls `policy.infer(obs)`; replies the action dict |
+
+### 1.5 First-infer init payload
+
+```python
+init_obs = {
+    "action_dim":  action_low.shape[0],
+    "action_low":  action_low,
+    "action_high": action_high,
+    "task_description": "<lang>",
+}
+client.infer(init_obs)
+```
+
+`ResetOnInitPolicy` ([§4.3](#43-resetoninitpolicy-episode-boundary-reset)) treats this as a soft reset trigger.
+
 ---
 
 ## 2. Policy Server Requirements
@@ -169,7 +192,7 @@ server.serve_forever()
 
 ### 4.3 ResetOnInitPolicy (Episode boundary reset)
 
-The client does not explicitly send reset; a new episode is detected by "first infer has no images":
+Optional wrapper that detects a new episode via "first infer has `action_dim` but no images" and calls `policy.reset()`:
 
 ```python
 class ResetOnInitPolicy(BasePolicy):
@@ -192,7 +215,7 @@ class ResetOnInitPolicy(BasePolicy):
 - [ ] Inherit `BasePolicy`, implement `infer(obs) -> {"actions": np.ndarray}`
 - [ ] `actions` as `np.float64`, shape `(action_dim,)` or `(7,)`; for chunk: `(H, action_dim)`
 - [ ] Handle first-infer `action_dim` / `action_low` / `action_high` (if needed)
-- [ ] If using chunk: wrap with `ActionChunkBroker` and use `ResetOnInitPolicy`
+- [ ] If using chunk: wrap with `ActionChunkBroker`; optionally also `ResetOnInitPolicy`
 - [ ] Start server with `WebsocketPolicyServer`
 
 ---
@@ -278,7 +301,7 @@ python scripts/run_eval.py --policy_server_addr localhost:8000 --task_name PnPCo
 
 ---
 
-## 8. RoboCasa Reference Implementations
+## 8. Reference Implementations
 
-- `tests/test_random_policy_server.py` — Single-step random policy
-- `tests/test_ac_policy_server.py` — Action Chunk (predict 16, execute 8) + ResetOnInitPolicy
+- `examples/policy_server.py` — Single-step random policy
+- `examples/policy_server_ac.py` — Action Chunk (predict 16, execute 8) + ResetOnInitPolicy
